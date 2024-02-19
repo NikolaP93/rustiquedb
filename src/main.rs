@@ -1,49 +1,17 @@
-mod store;
-use std;
-use std::sync::Arc;
-
-use store::KeyValueStore;
-use tokio::io::{AsyncReadExt, AsyncWriteExt};
+mod server;
+mod client;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let kv_store = Arc::new(KeyValueStore::new());
+  let server_handle = tokio::spawn(server::run());
 
-    let listener = tokio::net::TcpListener::bind("127.0.0.1:8081").await?;
+  let client_handle = tokio::spawn(client::run());
 
-    loop {
-        let kv_store = kv_store.clone();
-        let (mut socket, _) = listener.accept().await?;
+  let server_result = server_handle.await?;
+  let client_result = client_handle.await?;
 
-        tokio::spawn(async move {
-            let mut buffer = [0; 1024];
+  println!("Server result: {:?}", server_result);
+  println!("Client result: {:?}", client_result);
 
-            match socket.read(&mut buffer).await {
-                Ok(n) => {
-                    let received = String::from_utf8_lossy(&buffer[..n]).to_string();
-                    let parts: Vec<&str> = received.split_whitespace().collect();
-
-                    let response = match parts.as_slice() {
-                        ["GET", key] => kv_store
-                            .get(key.to_string())
-                            .map_or("Key not found".to_string(), |value| value),
-                        ["SET", key, value] => {
-                            kv_store.set(key.to_string(), value.to_string());
-                            "Key set successfully".to_string()
-                        }
-                        ["DELETE", key] => {
-                            kv_store.delete(key.to_string());
-                            "Key deleted successfully".to_string()
-                        }
-                        _ => "Unknown command or wrong format".to_string(),
-                    };
-
-                    if let Err(e) = socket.write_all(response.as_bytes()).await {
-                        println!("Failed to send response: {}", e);
-                    }
-                }
-                Err(e) => println!("Failed to read from socket: {}", e),
-            }
-        });
-    }
+  Ok(())
 }
