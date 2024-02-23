@@ -2,6 +2,7 @@ use std::collections::HashMap;
 use tokio::sync::RwLock;
 use std::io::{ self };
 use serde_json;
+use tokio::io::AsyncWriteExt;
 
 pub struct KeyValueStore {
     store: RwLock<HashMap<String, String>>,
@@ -37,19 +38,28 @@ impl KeyValueStore {
         }
     }
 
+    pub async fn log_command(&self, command: &str) -> io::Result<()> {
+      let mut aof = tokio::fs::OpenOptions::new().create(true).append(true).open("aof.txt").await?;
+      aof.write_all(command.as_bytes()).await?;
+      Ok(())
+    }
+
     pub async fn get(&self, key: String) -> Option<String> {
-        let read_access = self.store.read().await;
-        read_access.get(&key).cloned()
+      let read_access = self.store.read().await;
+      self.log_command(&format!("GET {}\n", &key)).await.unwrap();
+      read_access.get(&key).cloned()
     }
 
     pub async fn set(&self, key: String, value: String) {
         let mut write_access = self.store.write().await;
         println!("Saving key-value pair: {} = {}", &key, &value);
+        self.log_command(&format!("SET {} {}\n", &key, &value)).await.unwrap();
         write_access.insert(key, value);
     }
 
     pub async fn delete(&self, key: String) {
         let mut write_access = self.store.write().await;
+        self.log_command(&format!("DELETE {}\n", &key)).await.unwrap();
         write_access.remove(&key);
     }
 }
