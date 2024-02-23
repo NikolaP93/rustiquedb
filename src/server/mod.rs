@@ -4,6 +4,12 @@ use store::KeyValueStore;
 
 mod store;
 
+enum Command {
+    Get(String),
+    Set(String, String),
+    Delete(String),
+}
+
 async fn handle_connection(mut socket: tokio::net::TcpStream, kv_store: Arc<KeyValueStore>) {
     let mut buffer = [0; 1024];
     loop {
@@ -15,18 +21,33 @@ async fn handle_connection(mut socket: tokio::net::TcpStream, kv_store: Arc<KeyV
             Ok(n) => {
                 let received = String::from_utf8_lossy(&buffer[..n]).to_string();
                 let parts: Vec<&str> = received.split_whitespace().collect();
-                let response = match parts.as_slice() {
-                    ["GET", key] => kv_store.get(key.to_string()).await,
-                    ["SET", key, value] => {
+                let command = match parts.as_slice() {
+                    ["GET", key] => Command::Get(key.to_string()),
+                    ["SET", key, value] => Command::Set(key.to_string(), value.to_string()),
+                    ["DELETE", key] => Command::Delete(key.to_string()),
+                    _ => {
+                        if
+                            let Err(e) = socket.write_all(
+                                "Unknown command or wrong format".as_bytes()
+                            ).await
+                        {
+                            println!("Failed to send response: {}", e);
+                        }
+                        continue;
+                    }
+                };
+
+                let response = match command {
+                    Command::Get(key) => kv_store.get(key.to_string()).await,
+                    Command::Set(key, value) => {
                         kv_store.set(key.to_string(), value.to_string()).await;
                         kv_store.save("data.json").await.unwrap();
                         Some("Value set successfully".to_string())
                     }
-                    ["DELETE", key] => {
+                    Command::Delete(key) => {
                         kv_store.delete(key.to_string()).await;
                         Some("Key deleted successfully".to_string())
                     }
-                    _ => Some("Unknown command or wrong format".to_string()),
                 };
 
                 if let Some(response) = response {
