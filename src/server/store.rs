@@ -4,13 +4,13 @@ use std::io::{ self };
 use serde_json;
 use tokio::io::AsyncWriteExt;
 
-pub struct KeyValueStore {
+pub struct Db {
     store: RwLock<HashMap<String, String>>,
 }
 
-impl KeyValueStore {
+impl Db {
     pub fn new() -> Self {
-        KeyValueStore {
+        Db {
             store: RwLock::new(HashMap::new()),
         }
     }
@@ -18,7 +18,7 @@ impl KeyValueStore {
     pub async fn load(filename: &str) -> io::Result<Self> {
         let file_content = tokio::fs::read_to_string(filename).await?;
         let store: HashMap<String, String> = serde_json::from_str(&file_content)?;
-        Ok(KeyValueStore {
+        Ok(Db {
             store: RwLock::new(store),
         })
     }

@@ -3,27 +3,27 @@ mod command;
 mod connection;
 
 use std::sync::Arc;
-use store::KeyValueStore;
+use store::Db;
 use connection::handle_connection;
 
 pub async fn run() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     let listener = tokio::net::TcpListener::bind("127.0.0.1:8081").await?;
     println!("Server running on port 8081");
 
-    let initial_store = match KeyValueStore::load("data.json").await {
+    let initial_store = match Db::load("data.json").await {
         Ok(store) => store,
         Err(_) => {
             println!("No data file found, starting with empty store");
-            KeyValueStore::new()
+            Db::new()
         }
     };
 
-    let kv_store = Arc::new(initial_store);
+    let db = Arc::new(initial_store);
 
     loop {
         let (socket, _) = listener.accept().await?;
-        let kv_store = kv_store.clone();
+        let db = db.clone();
 
-        tokio::spawn(handle_connection(socket, kv_store));
+        tokio::spawn(handle_connection(socket, db));
     }
 }

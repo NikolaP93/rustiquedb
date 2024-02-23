@@ -1,11 +1,11 @@
 
 use super::command::{ parse_command, Command };
-use super::store::KeyValueStore;
+use super::store::Db;
 use std::sync::Arc;
 use tokio::io::{ AsyncReadExt, AsyncWriteExt };
 
 
-pub async fn handle_connection(mut socket: tokio::net::TcpStream, kv_store: Arc<KeyValueStore>) {
+pub async fn handle_connection(mut socket: tokio::net::TcpStream, db: Arc<Db>) {
   let mut buffer = [0; 1024];
   loop {
       match socket.read(&mut buffer).await {
@@ -18,14 +18,14 @@ pub async fn handle_connection(mut socket: tokio::net::TcpStream, kv_store: Arc<
               let command = parse_command(&received);
 
               let response = match command {
-                  Some(Command::Get(key)) => kv_store.get(key.to_string()).await,
+                  Some(Command::Get(key)) => db.get(key.to_string()).await,
                   Some(Command::Set(key, value)) => {
-                      kv_store.set(key.to_string(), value.to_string()).await;
-                      kv_store.save("data.json").await.unwrap();
+                      db.set(key.to_string(), value.to_string()).await;
+                      db.save("data.json").await.unwrap();
                       Some("Value set successfully".to_string())
                   }
                   Some(Command::Delete(key)) => {
-                      kv_store.delete(key.to_string()).await;
+                      db.delete(key.to_string()).await;
                       Some("Key deleted successfully".to_string())
                   }
                   None => Some("Invalid command".to_string()),
