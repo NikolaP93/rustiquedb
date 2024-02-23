@@ -24,10 +24,17 @@ impl KeyValueStore {
 
     pub async fn save(&self, filename: &str) -> io::Result<()> {
         let read_access = self.store.read().await;
-        let serialized = serde_json::to_string(&*read_access).unwrap();
-        println!("Saving to file: {}", serialized);
-        tokio::fs::write(filename, serialized).await?;
-        Ok(())
+        let serialized = serde_json::to_string(&*read_access);
+        match serialized {
+            Ok(serialized) => {
+                tokio::fs::write(filename, serialized).await?;
+                Ok(())
+            }
+            Err(e) => {
+                println!("Failed to serialize store: {}", e);
+                Err(io::Error::new(io::ErrorKind::Other, "Failed to serialize store"))
+            }
+        }
     }
 
     pub async fn get(&self, key: String) -> Option<String> {
